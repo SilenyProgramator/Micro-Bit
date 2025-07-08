@@ -1,0 +1,87 @@
+from microbit import *
+import cuteBot
+import basic
+import input
+
+running = False
+
+# tlačítko A = spustit
+def on_button_pressed_a():
+    global running
+    running = True
+    basic.show_leds("""
+        . . . . .
+        . # . # .
+        . . . . .
+        # . . . #
+        . # # # .
+    """)
+
+# tlačítko B = zastavit
+def on_button_pressed_b():
+    global running
+    running = False
+    cuteBot.stopcar()
+    basic.show_leds("""
+        . . . . .
+        . # . # .
+        . . . . .
+        . # # # .
+        # . . . #
+    """)
+
+input.on_button_pressed(Button.A, on_button_pressed_a)
+input.on_button_pressed(Button.B, on_button_pressed_b)
+
+# Pomocná funkce: test, jestli může jet vpřed
+def is_path_clear():
+    distance = cuteBot.ultrasonic(cuteBot.SonarUnit.CENTIMETERS)
+    line_detected = (
+        cuteBot.tracking(cuteBot.TrackingState.L_LINE_R_UNLINE) or
+        cuteBot.tracking(cuteBot.TrackingState.L_UNLINE_R_LINE) or
+        cuteBot.tracking(cuteBot.TrackingState.L_R_LINE)
+    )
+    return distance >= 4 and not line_detected
+
+def on_forever():
+    global running
+
+    if not running:
+        cuteBot.stopcar()
+        return
+
+    distance = cuteBot.ultrasonic(cuteBot.SonarUnit.CENTIMETERS)
+    line_detected = (
+        cuteBot.tracking(cuteBot.TrackingState.L_LINE_R_UNLINE) or
+        cuteBot.tracking(cuteBot.TrackingState.L_UNLINE_R_LINE) or
+        cuteBot.tracking(cuteBot.TrackingState.L_R_LINE)
+    )
+
+    if distance < 4 or line_detected:
+        # 1. Zastav a trochu couvni
+        cuteBot.stopcar()
+        basic.pause(200)
+        cuteBot.motors(-30, -30)
+        basic.pause(300)
+        cuteBot.stopcar()
+
+        # 2. Postupně zkoušej otáčet doleva a pak doprava
+        for angle in [300, 500, 300, 500]:  # dvě doleva, dvě doprava
+            if angle <= 400:
+                cuteBot.motors(-30, 30)  # otočení doleva
+            else:
+                cuteBot.motors(30, -30)  # otočení doprava
+
+            basic.pause(angle)
+            cuteBot.stopcar()
+            basic.pause(200)
+
+            # test, jestli cesta vpřed je volná
+            if is_path_clear():
+                break  # vypadni ze smyčky a pokračuj
+
+    else:
+        # Pokud je cesta čistá, jeď vpřed
+        cuteBot.motors(30, 30)
+
+basic.forever(on_forever)
